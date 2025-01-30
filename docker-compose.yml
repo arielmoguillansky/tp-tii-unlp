@@ -1,0 +1,86 @@
+version: "3.8"
+
+services:
+  mongo:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - 27017:27017
+    expose:
+      - 27017
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - 6379:6379
+    expose:
+      - 6379
+
+  limiter:
+    image: limiter-service:latest
+    container_name: limiter-service
+    build: 
+      context: ./limiter-service
+    depends_on:
+      - redis
+    ports:
+      - 5002:5002
+    expose:
+      - 5002
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+  predictor:
+    image: predictor-service:latest
+    container_name: predictor-service
+    build: 
+      context: ./predictor-service
+    depends_on:
+      - mongo
+      - limiter
+    ports:
+      - 5000:5000
+    expose:
+      - 5000
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017
+      - DB_NAME=predictor_db
+      - LIMITER_URL=http://limiter:6000
+  register:
+    image: register-service:latest
+    container_name: register-service
+    build: 
+      context: ./register-service
+    depends_on:
+      - mongo
+    ports:
+      - 5001:5001
+    expose:
+      - 5001
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017
+      - DB_NAME=predictor_db
+      - WEB_HOST=http://webapp:3000
+      - REDIS_KEY=123
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+  webapp:
+    image: webapp:latest
+    container_name: webapp
+    build: 
+      context: ./webapp
+    depends_on:
+      - mongo
+      - redis
+      - register
+    ports:
+      - 3000:3000
+    expose:
+      - 3000
+    environment:
+      - WEB_HOST=http://webapp:3000
+      - REDIS_KEY=123
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379

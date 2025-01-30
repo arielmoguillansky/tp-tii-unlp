@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+    <h1>Regístrese para poder acceder al sevicio de predicción</h1>
+    <form id="registrationForm" method="POST">
+        <label for="user_id">Email:</label>
+        <input type="email" id="user_email" name="user_email" required><br><br>
+
+        <label for="user_type">Subscripción:</label>
+        <select id="user_type" name="user_type" required>
+            <option value="premium">Premium</option>
+            <option value="freemium">Freemium</option>
+        </select><br><br>
+
+        <input type="submit" value="Registrarse">
+    </form>
+
+    <p>Si ya tiene usuario, inicie sesión</p>
+    <a href="/login">Iniciar sesión</a>
+
+    <div id="response">
+        {% if response %}
+            <p>{{ response }}</p>
+        {% endif %}
+    </div>
+{% endblock %}
+
