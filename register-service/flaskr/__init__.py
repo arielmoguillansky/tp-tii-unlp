@@ -1,10 +1,8 @@
 from flask import (
     Flask,
     request,
-    redirect,
-    session,
-    abort,
     jsonify,
+    session
 )
 import uuid
 from datetime import datetime
@@ -12,7 +10,15 @@ from flaskr.db import get_db
 import os
 import redis
 from flask_session import Session
+import logging
+import sys
 
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 app = Flask(__name__)
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
@@ -21,6 +27,7 @@ WEBAPP_HOST = os.getenv("WEBAPP_HOST", "http://localhost:3000")
 app.secret_key = os.getenv('REDIS_KEY', default='123')
 
 redis_client = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+
 app.config['SESSION_TYPE'] = 'redis'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
@@ -31,18 +38,43 @@ server_session = Session(app)
 def healthcheck():
     return "Auth Server healthy"
 
+    
+@app.route("/login", methods=["POST"])
+def login():
+    user_email = request.json.get("email")
+
+    if not user_email:
+        return jsonify({"allowed": False, "message": "Falta email"}), 400     
+
+    existing_user = get_db().users.find_one({"email": user_email})
+
+    if not existing_user:
+        return jsonify({"allowed": False, "message": "No existe un usuario con ese email"}), 401   
+
+    session["user"] = {
+        "oid": existing_user["oid"],
+        "email": existing_user["email"],
+        "type": existing_user["type"],
+    }
+    session["logged_in"] = True  
+    
+    return jsonify({"allowed": True, "message": "Inicio sesión con éxito", "user": {"oid": existing_user["oid"], "email": existing_user["email"], "type": existing_user["type"]}}), 201     
+
 @app.route("/register", methods=["POST"])
 def register():
     user_email = request.json.get("email")
     user_type = request.json.get("type")
 
-    if not user_email or not user_type:
-        abort(400, description="Falta el email o el tipo de usuario")
+    if not user_email:
+        return jsonify({"allowed": False, "message": "Falta email"}), 400     
+
+    if not user_type:
+        return jsonify({"allowed": False, "message": "Falta tipo de suscripción"}), 400     
 
     existing_user = get_db().users.find_one({"email": user_email})
 
     if(existing_user):
-        abort(400, description="Ya existe un usuario con ese email")
+        return jsonify({"allowed": False, "message": "Ya existe un usuario con el mail proporcionado"}), 400     
 
     new_user =  {
             "oid": str(uuid.uuid4()),
@@ -53,28 +85,18 @@ def register():
     
     get_db().users.insert_one(new_user)
 
-    session['user'] = existing_user
+    session["user"] = {
+        "oid": new_user["oid"],
+        "email": new_user["email"],
+        "type": new_user["type"],
+    }
+    session["logged_in"] = True  
 
-    # return jsonify({"message": "Usuario registrado con éxito", "user": {"oid": new_user["oid"], "email": new_user["email"], "type": new_user["type"]}}), 201 
-    return redirect(f"{WEBAPP_HOST}/")
-    
-@app.route("/login", methods=["POST"])
-def login():
-    user_email = request.json.get("email")
+    return jsonify({"allowed": True, "message": "Usuario registrado con éxito", "user": {"oid": new_user["oid"], "email": new_user["email"], "type": new_user["type"]}}), 201 
 
-    if not user_email:
-        abort(400, description="Falta el email o el tipo de usuario")
+@app.route("/logout", methods=["POST"])
+def logout():
 
+    session.clear()
 
-    existing_user = get_db().users.find_one({"email": user_email})
-
-    if not existing_user:
-        abort(400, description="No existe un usuario con ese email")
-
-    # session_id = create_session()
-    # redis_client.set(session_id, existing_user)
-    session['user'] = existing_user
-    
-    # return jsonify({"message": "Inicio sesión con éxito", "user":  {"oid": existing_user["oid"], "email": existing_user["email"], "type": existing_user["type"]}}), 201 
-    return redirect(f"{WEBAPP_HOST}/")
-    
+    return jsonify({"allowed": True, "message": "Sesión cerrada"}), 200 

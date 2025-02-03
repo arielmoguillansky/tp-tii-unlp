@@ -7,8 +7,8 @@
 
         <label for="user_type">Subscripción:</label>
         <select id="user_type" name="user_type" required>
-            <option value="premium">Premium</option>
             <option value="freemium">Freemium</option>
+            <option value="premium">Premium</option>
         </select><br><br>
 
         <input type="submit" value="Registrarse">
@@ -22,5 +22,9 @@
             <p>{{ response }}</p>
         {% endif %}
     </div>
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+
 {% endblock %}
 

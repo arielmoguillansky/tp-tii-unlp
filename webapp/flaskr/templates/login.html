@@ -1,14 +1,18 @@
 {% extends 'base.html' %}
 {% block content %}
     <h1>Inicie sesión para acceder al servicio de predicción</h1>
-    <form id="loginForm" method="POST">
-        <label for="user_id">Email:</label>
+    <form method="post" action="/login">
+        <label for=" user_email">Email:</label>
         <input type="email" id="user_email" name="user_email" required><br><br>
 
-        <input type="submit" value="Iniciar sesión">
+        <button type="submit">Iniciar sesión</button>
     </form>
 
     <p>Si no tiene usuario, puede registrarse</p>
     <a href="/register">Registrarse</a>
+
+    {% if error %}
+    <p style="color: red;">{{ error }}</p>
+    {% endif %}
 
 {% endblock %}

@@ -81,6 +81,7 @@ services:
       - 3000
     environment:
       - WEB_HOST=http://webapp:3000
+      - AUTH_HOST=http://register:5001
       - REDIS_KEY=123
       - REDIS_HOST=redis
       - REDIS_PORT=6379
