@@ -12,6 +12,9 @@ import redis
 from flask_session import Session
 import logging
 import sys
+import jwt
+
+SECRET_KEY_JWT = os.getenv("SECRET_KEY_JWT", "your_jwt_secret_key")
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -23,7 +26,6 @@ app = Flask(__name__)
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-WEBAPP_HOST = os.getenv("WEBAPP_HOST", "http://localhost:3000")
 app.secret_key = os.getenv('REDIS_KEY', default='123')
 
 redis_client = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
@@ -85,18 +87,16 @@ def register():
     
     get_db().users.insert_one(new_user)
 
-    session["user"] = {
-        "oid": new_user["oid"],
-        "email": new_user["email"],
-        "type": new_user["type"],
-    }
-    session["logged_in"] = True  
+    token = jwt.encode(new_user, SECRET_KEY_JWT, algorithm="HS256")
+    
+    response = jsonify({"allowed": True, "message": "Usuario registrado con éxito", "user": {"oid": new_user["oid"], "email": new_user["email"], "type": new_user["type"]}})
+    response.set_cookie('access_token', token, httponly=True, samesite='Strict')
 
-    return jsonify({"allowed": True, "message": "Usuario registrado con éxito", "user": {"oid": new_user["oid"], "email": new_user["email"], "type": new_user["type"]}}), 201 
+    return response, 201 
 
-@app.route("/logout", methods=["POST"])
-def logout():
+# @app.route("/logout", methods=["POST"])
+# def logout():
 
-    session.clear()
+#     session.clear()
 
-    return jsonify({"allowed": True, "message": "Sesión cerrada"}), 200 
+#     return jsonify({"allowed": True, "message": "Sesión cerrada"}), 200 

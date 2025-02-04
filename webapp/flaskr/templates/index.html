@@ -1,7 +1,14 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<header>
     <h1>Bienvenido</h1>
+    <nav>
+        <ul>
+            <li><a href="/logout">Cerrar sesión</a></li>
+        </ul>
+    </nav>
+    </header>
 
     <p>Sesión iniciada como: {{ session.user.email }}</p>
     <form method="post" action="/logout">

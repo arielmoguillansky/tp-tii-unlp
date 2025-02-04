@@ -66,6 +66,7 @@ services:
       - REDIS_KEY=123
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - SECRET_KEY_JWT=your_jwt_secret_key
   webapp:
     image: webapp:latest
     container_name: webapp
@@ -85,3 +86,4 @@ services:
       - REDIS_KEY=123
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - SECRET_KEY_JWT=your_jwt_secret_key

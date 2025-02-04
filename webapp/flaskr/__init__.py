@@ -12,10 +12,13 @@ import logging
 import sys
 import redis
 from flask_session import Session
+import jwt
+
+SECRET_KEY_JWT = os.getenv("SECRET_KEY_JWT", "your_jwt_secret_key")
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)  # Set the desired logging level
-handler = logging.StreamHandler(sys.stdout)  # Use sys.stdout
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -24,7 +27,7 @@ app = Flask(__name__)
 AUTH_HOST = os.getenv("AUTH_HOST", "http://localhost:5001")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-app.secret_key = os.getenv('REDIS_KEY', default='123') # Same as auth service!
+app.secret_key = os.getenv('REDIS_KEY', default='123')
 
 redis_client = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
 
@@ -76,6 +79,8 @@ def register():
             auth_response = requests.post(f"{AUTH_HOST}/register", json={"email": user_email, "type": user_type}, headers={"Content-Type": "application/json"})
             auth_data = auth_response.json()
 
+            logger.debug(f"~~~~~~~~~~ RESPONSE LOGIN V2: {list(session.keys())}")
+
             if auth_data.get("allowed"):
                 return redirect('/')
             else:
@@ -88,26 +93,29 @@ def register():
 
 @app.route("/")
 def home():
-    try:
+        token = request.cookies.get('access_token')
         logger.debug(f"~~~~~~~~~~ RESPONSE LOGIN V2: {list(session.keys())}")
-        if not session.get("user"):
+        if not token:
             return redirect('/login')
+        try:
+            payload = jwt.decode(token, SECRET_KEY_JWT, algorithms=["HS256"])
+            # Now you have the user info from the payload
+            session["user"] = payload # Store user in session, but only after JWT verification
+            return render_template("index.html", session={"user": session.get("user"), "logged_in": True})
 
-    except requests.exceptions.RequestException as e:
-        return jsonify({"allowed": False, "error": f"Error contacting authentication service: {e}"})
-    
-    return render_template("index.html", session={"user": session.get("user"), "logged_in": True})
+        except jwt.ExpiredSignatureError:
+            return redirect('/login')  # Token expired
+        except jwt.InvalidTokenError:
+            return redirect('/login')  # Invalid token
 
-
-@app.route("/logout",  methods=["POST"])
-def logout():
-    user_email = request.form.get("user_email")
-    try:
-        auth_response = requests.post(f"{AUTH_HOST}/logout", json={"email": user_email}, headers={"Content-Type": "application/json"})
-        auth_data = auth_response.json()
+# @app.route("/logout",  methods=["GET"])
+# def logout():
+#     try:
+#         auth_response = requests.post(f"{AUTH_HOST}/logout")
+#         auth_data = auth_response.json()
         
-        if auth_data.get("allowed"):
-            return redirect('/login')
+#         if auth_data.get("allowed"):
+#             return redirect('/login')
 
-    except requests.exceptions.RequestException as e:
-        return jsonify({"allowed": False, "error": f"Error contacting authentication service: {e}"})
+#     except requests.exceptions.RequestException as e:
+#         return jsonify({"allowed": False, "error": f"Error contacting authentication service: {e}"})
