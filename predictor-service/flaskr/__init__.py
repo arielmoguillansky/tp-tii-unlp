@@ -5,12 +5,29 @@ from flask import (
     abort,
     jsonify,
 )
+import requests
 from flaskr.db import get_db
 from datetime import datetime
 from pykeen.triples import TriplesFactory
 import pandas as pd
 import torch
 from bson.json_util import dumps
+import logging
+import sys
+import os
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+LIMITER_URL = os.getenv("LIMITER_URL", "http://localhost:6000")
+
+
+app = Flask(__name__)
+
 
 model = torch.load("trained_model.pkl", weights_only=False, map_location=torch.device('cpu'))
 triples_file = "dataset_train.tsv.gz"
@@ -24,36 +41,30 @@ def is_valid_entity(entity):
     return "pronto.owl#space_site" in entity and len(entity.split("#")[1].split("_")) == 3
 
 
-def create_app(test_config=None):
+@app.route("/healthcheck")
+def healthcheck():
+    return "Predictor Server healthy"
 
-    app = Flask(__name__, instance_relative_config=True)
+@app.route("/predict", methods=["POST"])
+def predict():
+    if request.method == "POST":
+        try:
+            limiter_response = requests.get(f"{LIMITER_URL}/check_limit")
+            limiter_data = limiter_response.json()
 
-    @app.route("/healthcheck")
-    def healthcheck():
-        return "Server healthy"
-
-    @app.route("/predict", methods=["POST"])
-    def predict():
-        user_id = request.headers.get("X-User-ID")
-        user_type = request.headers.get("X-User-Type")
-
-        if not user_id or not user_type:
-            abort(400, description="Missing user ID or user type")
-
-        limiter_response = requests.post("http://localhost:6000/check_limit", json={"user_id": user_id, "user_type": user_type})
-
-        if limiter_response.status_code == 429:
-            abort(429, description="Rate limit exceeded. Try again later.")
-
-        if limiter_response.status_code != 200:
-            abort(500, description="Rate limiter service error.")
-
+            if not limiter_data.get("allowed"):
+                logger.debug(f"////////////////////////////////////////// PREDICTOR RESPONSE: {limiter_data}")
+                return jsonify(limiter_data), 429
+        
+        except requests.exceptions.RequestException as e:
+            return jsonify({"allowed": False, "error": f"Error contacting limiter service: {e}"})
+        
         heads = []
         error = None
-        entity_urls = request.json.get("entity_urls")
+        entity_urls = request.json.get("entity_payload")
 
         if not entity_urls:
-            abort(404, description="Debe proporcionar urls o ids de entidades válidas.")
+            return jsonify({"allowed": False, "error": "Debe proporcionar urls o ids de entidades válidas."}), 500
 
         for entity in entity_urls:
             if isinstance(entity, int):
@@ -71,7 +82,7 @@ def create_app(test_config=None):
                 heads.append(entity)
 
         if error:
-            abort(404, description=error)
+            return jsonify({"allowed": False, "error": error}), 500
 
         relations = ['http://www.w3.org/2002/07/owl#sameAs'] * len(heads)
 
@@ -94,16 +105,15 @@ def create_app(test_config=None):
                 "response": result
             }
         )
-        return jsonify(result)
-        
-    @app.route('/requests',methods=['GET', 'POST'])
-    def requests():
-        result=get_db().request_log.find()
-        # se convierte el cursor a una lista
-        list_cur = list(result)         
-        # se serializan los objetos
-        json_data = dumps(list_cur, indent = 2)  
-        #retornamos la lista con los metadatos adecuados
-        return Response(json_data,mimetype='application/json')
+        return jsonify({"allowed": True, "response": result}), 200
+    
+@app.route('/logrequests',methods=['GET', 'POST'])
+def logrequests():
+    result=get_db().request_log.find()
+    # se convierte el cursor a una lista
+    list_cur = list(result)         
+    # se serializan los objetos
+    json_data = dumps(list_cur, indent = 2)  
+    #retornamos la lista con los metadatos adecuados
+    return Response(json_data,mimetype='application/json')
 
-    return app

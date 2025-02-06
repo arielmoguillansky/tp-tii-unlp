@@ -12,9 +12,7 @@ import logging
 import sys
 import redis
 from flask_session import Session
-import jwt
-
-SECRET_KEY_JWT = os.getenv("SECRET_KEY_JWT", "your_jwt_secret_key")
+import json
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -22,20 +20,15 @@ handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
 app = Flask(__name__)
 
 AUTH_HOST = os.getenv("AUTH_HOST", "http://localhost:5001")
+PREDICTOR_HOST = os.getenv("PREDICTOR_HOST", "http://localhost:5000")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-app.secret_key = os.getenv('REDIS_KEY', default='123')
 
 redis_client = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
-
-app.config['SESSION_TYPE'] = 'redis'
-app.config['SESSION_PERMANENT'] = False
-app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_REDIS'] = redis.from_url(f"redis://{REDIS_HOST}:{REDIS_PORT}")
-server_session = Session(app)
 
 @app.route("/healthcheck")
 def healthcheck():
@@ -43,6 +36,10 @@ def healthcheck():
 
 @app.route("/login",  methods=["GET", "POST"])
 def login():
+    logged_value = redis_client.hget("user","logged")
+    if logged_value == "True":
+        return redirect('/')
+    
     if request.method == "POST":
         user_email = request.form.get("user_email")
 
@@ -60,11 +57,16 @@ def login():
             
         except requests.exceptions.RequestException as e:
             return jsonify({"allowed": False, "error": f"Error contacting authentication service: {e}"})
-        
+    
     return render_template('login.html')
     
 @app.route("/register",  methods=["GET", "POST"])
 def register():
+    logged_value = redis_client.hget("user","logged")
+    
+    if logged_value == "True":
+        return redirect('/')
+    
     if request.method == "POST":
         user_email = request.form.get("user_email")
         user_type = request.form.get("user_type")
@@ -79,43 +81,63 @@ def register():
             auth_response = requests.post(f"{AUTH_HOST}/register", json={"email": user_email, "type": user_type}, headers={"Content-Type": "application/json"})
             auth_data = auth_response.json()
 
-            logger.debug(f"~~~~~~~~~~ RESPONSE LOGIN V2: {list(session.keys())}")
-
             if auth_data.get("allowed"):
                 return redirect('/')
             else:
                 return render_template('register.html', error=auth_data.get("message"))
 
         except requests.exceptions.RequestException as e:
-            return jsonify({"allowed": False, "error": f"Error contacting authentication service: {e}"})
-        
+            return jsonify({"allowed": False, "error": f"Error en el servicio de autenticación: {e}"}),500
+    
     return render_template('register.html')
+    
+@app.route("/predict",  methods=["POST"])
+def predict():
+    logged_value = redis_client.hget("user","logged")
+    
+    if logged_value == "False":
+        return redirect('/login')
+    
+    if request.method == "POST":
+        predict_payload = request.json.get("payload")
+
+        if len(predict_payload) == 0: 
+            return jsonify({"allowed": False, "status":400, "error": "Debe proporcionar una URI o Id"}),400
+
+        try:
+            predictor_response = requests.post(f"{PREDICTOR_HOST}/predict", json={"entity_payload": predict_payload}, headers={"Content-Type": "application/json"})
+            predictor_data = predictor_response.json()
+
+            if predictor_data.get("allowed"):
+               return jsonify({"allowed": True, "response": predictor_data.get("response")}),200
+            else:
+                return jsonify({"allowed": False, "error": {"message": predictor_data.get("error"),"time_left": predictor_data.get("time_left")}}), 400
+
+        except requests.exceptions.RequestException as e:
+            return jsonify({"allowed": False, "error": f"Error en el servicio de predicción: {e}"}),500
+    
+    return render_template('index.html')
 
 @app.route("/")
 def home():
-        token = request.cookies.get('access_token')
-        logger.debug(f"~~~~~~~~~~ RESPONSE LOGIN V2: {list(session.keys())}")
-        if not token:
+        logged_value = redis_client.hget("user","logged")
+        if logged_value == "True": 
+            return render_template("index.html", session={"user": redis_client.hgetall("user")})
+
+        elif logged_value is None: 
             return redirect('/login')
-        try:
-            payload = jwt.decode(token, SECRET_KEY_JWT, algorithms=["HS256"])
-            # Now you have the user info from the payload
-            session["user"] = payload # Store user in session, but only after JWT verification
-            return render_template("index.html", session={"user": session.get("user"), "logged_in": True})
 
-        except jwt.ExpiredSignatureError:
-            return redirect('/login')  # Token expired
-        except jwt.InvalidTokenError:
-            return redirect('/login')  # Invalid token
+        else:
+            return redirect('/login')
 
-# @app.route("/logout",  methods=["GET"])
-# def logout():
-#     try:
-#         auth_response = requests.post(f"{AUTH_HOST}/logout")
-#         auth_data = auth_response.json()
+@app.route("/logout")
+def logout():
+    try:
+        auth_response = requests.post(f"{AUTH_HOST}/logout")
+        auth_data = auth_response.json()
         
-#         if auth_data.get("allowed"):
-#             return redirect('/login')
+        if auth_data.get("allowed"):
+            return redirect('/login')
 
-#     except requests.exceptions.RequestException as e:
-#         return jsonify({"allowed": False, "error": f"Error contacting authentication service: {e}"})
+    except requests.exceptions.RequestException as e:
+        return jsonify({"allowed": False, "error": f"Error en el servicio de autenticación: {e}"}),500

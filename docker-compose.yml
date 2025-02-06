@@ -55,6 +55,7 @@ services:
       context: ./register-service
     depends_on:
       - mongo
+      - redis
     ports:
       - 5001:5001
     expose:
@@ -66,7 +67,7 @@ services:
       - REDIS_KEY=123
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - SECRET_KEY_JWT=your_jwt_secret_key
+      - SECRET_KEY=secretkey
   webapp:
     image: webapp:latest
     container_name: webapp
@@ -76,6 +77,7 @@ services:
       - mongo
       - redis
       - register
+      - predictor
     ports:
       - 3000:3000
     expose:
@@ -83,7 +85,8 @@ services:
     environment:
       - WEB_HOST=http://webapp:3000
       - AUTH_HOST=http://register:5001
+      - PREDICTOR_HOST=http://predictor:5000
       - REDIS_KEY=123
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - SECRET_KEY_JWT=your_jwt_secret_key
+      - SECRET_KEY=secretkey

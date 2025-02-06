@@ -12,9 +12,6 @@ import redis
 from flask_session import Session
 import logging
 import sys
-import jwt
-
-SECRET_KEY_JWT = os.getenv("SECRET_KEY_JWT", "your_jwt_secret_key")
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -26,21 +23,9 @@ app = Flask(__name__)
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-app.secret_key = os.getenv('REDIS_KEY', default='123')
 
 redis_client = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
 
-app.config['SESSION_TYPE'] = 'redis'
-app.config['SESSION_PERMANENT'] = False
-app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_REDIS'] = redis.from_url(f"redis://{REDIS_HOST}:{REDIS_PORT}")
-server_session = Session(app)
-
-@app.route("/healthcheck")
-def healthcheck():
-    return "Auth Server healthy"
-
-    
 @app.route("/login", methods=["POST"])
 def login():
     user_email = request.json.get("email")
@@ -52,13 +37,16 @@ def login():
 
     if not existing_user:
         return jsonify({"allowed": False, "message": "No existe un usuario con ese email"}), 401   
-
-    session["user"] = {
+    
+    logged_user = {
         "oid": existing_user["oid"],
         "email": existing_user["email"],
         "type": existing_user["type"],
+        "logged": "True"
     }
-    session["logged_in"] = True  
+
+    redis_client.hmset('user', mapping = logged_user)
+    redis_client.expire('user', 3600)
     
     return jsonify({"allowed": True, "message": "Inicio sesión con éxito", "user": {"oid": existing_user["oid"], "email": existing_user["email"], "type": existing_user["type"]}}), 201     
 
@@ -84,19 +72,19 @@ def register():
             "type": user_type,
             "createdAt": datetime.now().isoformat(),
         }
-    
+
+    redis_client.hmset('user', mapping = {**new_user, "logged": "True"})
+    redis_client.expire('user', 3600)
+
     get_db().users.insert_one(new_user)
 
-    token = jwt.encode(new_user, SECRET_KEY_JWT, algorithm="HS256")
-    
     response = jsonify({"allowed": True, "message": "Usuario registrado con éxito", "user": {"oid": new_user["oid"], "email": new_user["email"], "type": new_user["type"]}})
-    response.set_cookie('access_token', token, httponly=True, samesite='Strict')
 
     return response, 201 
 
-# @app.route("/logout", methods=["POST"])
-# def logout():
+@app.route("/logout", methods=["POST"])
+def logout():
 
-#     session.clear()
-
-#     return jsonify({"allowed": True, "message": "Sesión cerrada"}), 200 
+    redis_client.delete("user")
+    
+    return jsonify({"allowed": True, "message": "Sesión cerrada"}), 200 
