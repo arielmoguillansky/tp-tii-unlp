@@ -108,8 +108,8 @@ def predict():
             predictor_response = requests.post(f"{PREDICTOR_HOST}/predict", json={"entity_payload": predict_payload}, headers={"Content-Type": "application/json"})
             predictor_data = predictor_response.json()
 
-            if predictor_data.get("allowed"):
-               return jsonify({"allowed": True, "response": predictor_data.get("response")}),200
+            if predictor_data.get("allowed"):   
+                return jsonify({"allowed": True, "response": predictor_data.get("response")}),200
             else:
                 return jsonify({"allowed": False, "error": {"message": predictor_data.get("error"),"time_left": predictor_data.get("time_left")}}), 400
 
@@ -138,6 +138,25 @@ def logout():
         
         if auth_data.get("allowed"):
             return redirect('/login')
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"allowed": False, "error": f"Error en el servicio de autenticación: {e}"}),500
+    
+    
+@app.route('/logrequests')
+def logrequests():
+    logged_value = redis_client.hget("user","logged")
+    
+    if not logged_value or logged_value == "False":
+        return redirect('/login')
+    
+    try:
+        log_response = requests.get(f"{AUTH_HOST}/logrequests")
+        log_data = log_response.json()
+        
+        if log_data.get("allowed"):
+            return render_template("logrequests.html", response = log_data.get("response"), session = {"user": redis_client.hgetall("user")})
+
 
     except requests.exceptions.RequestException as e:
         return jsonify({"allowed": False, "error": f"Error en el servicio de autenticación: {e}"}),500

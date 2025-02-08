@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<header>
+    <nav style="display: flex; justify-content: space-between;">
+        <h3>Bienvenido {{ session.user.email }} - {{session.user.type}}</h3>
+        <a href="/logout" class="logout-btn">Cerrar sesión</a>
+    </nav>
+</header>
+    <h1>Request Logs</h1>
+    <div class="log-container">
+        {% if response %}
+            {% for item in response %}
+                <div class="log-item">
+                    <strong>User ID:</strong> {{ item.user_id }}<br>
+                    <strong>Params:</strong> {{ item.params }}<br>
+                    <strong>Response:</strong> {{ item.response }}<br>
+                    <strong>Execution Time:</strong> {{ item.execution_time }}
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No logs found.</p>
+        {% endif %}
+    </div>
+{% endblock %}
+

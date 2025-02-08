@@ -25,18 +25,16 @@ def healthcheck():
 
 @app.route("/check_limit")
 def check_limit():
-    # if request.method == "POST":
         user_id = redis_client.hget("user","oid")
         user_type = redis_client.hget("user","type")
-        # data = request.json
-        # user_id = data.get("user_id")
-        # user_type = data.get("user_type")
-
+        # FREEMIUM; 5 solicitudes por minuto (RPM)
+        # PREMIUM: 50 solicitudes por minuto (RPM)
+        requests_per_minute = 5
         if not user_id or not user_type:
             return jsonify({"error": "Error en los datos del usuario"}), 400
 
         if user_type == "premium":
-            return jsonify({"allowed": True})
+            requests_per_minute = 50
 
         current_time = int(datetime.now().timestamp())
         window_start = current_time // 60 
@@ -45,13 +43,13 @@ def check_limit():
         request_count = redis_client.get(key)
         if request_count is None:
             redis_client.set(key, 1, ex=60)
-        elif int(request_count) < 3:
+        elif int(request_count) < requests_per_minute:
             redis_client.incr(key)
         else:
             ttl = redis_client.ttl(key)
             return jsonify({
                 "allowed": False,
-                "error": "Límite de peticiones alcanzado. Inténtalo de nuevo más tarde, o cambia a una cuenta premium.",
+                "error": "Límite de peticiones alcanzado. Inténtalo de nuevo más tarde.",
                 "time_left": ttl
             }), 429
 

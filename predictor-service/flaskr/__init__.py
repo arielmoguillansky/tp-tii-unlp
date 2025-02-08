@@ -11,10 +11,11 @@ from datetime import datetime
 from pykeen.triples import TriplesFactory
 import pandas as pd
 import torch
-from bson.json_util import dumps
 import logging
 import sys
 import os
+import redis
+import time
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -25,6 +26,10 @@ logger.addHandler(handler)
 
 LIMITER_URL = os.getenv("LIMITER_URL", "http://localhost:6000")
 
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+
+redis_client = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
 
 app = Flask(__name__)
 
@@ -48,12 +53,12 @@ def healthcheck():
 @app.route("/predict", methods=["POST"])
 def predict():
     if request.method == "POST":
+        start_time = time.time()
         try:
             limiter_response = requests.get(f"{LIMITER_URL}/check_limit")
             limiter_data = limiter_response.json()
 
             if not limiter_data.get("allowed"):
-                logger.debug(f"////////////////////////////////////////// PREDICTOR RESPONSE: {limiter_data}")
                 return jsonify(limiter_data), 429
         
         except requests.exceptions.RequestException as e:
@@ -96,24 +101,10 @@ def predict():
         torch.cuda.empty_cache()
         scores = model.score_t(sample)
 
-        top_scores, top_indices= torch.topk(scores, 10, largest=False)
-        result = {"scores":top_scores.tolist(), "indexes":top_indices.tolist()}
-        get_db().request_log.insert_one( 
-            {
-                "timestamp": datetime.now().isoformat(),
-                "params": entity_urls,
-                "response": result
-            }
-        )
-        return jsonify({"allowed": True, "response": result}), 200
-    
-@app.route('/logrequests',methods=['GET', 'POST'])
-def logrequests():
-    result=get_db().request_log.find()
-    # se convierte el cursor a una lista
-    list_cur = list(result)         
-    # se serializan los objetos
-    json_data = dumps(list_cur, indent = 2)  
-    #retornamos la lista con los metadatos adecuados
-    return Response(json_data,mimetype='application/json')
+        end_time = time.time()
+        execution_time = end_time - start_time
 
+        top_scores, top_indices = torch.topk(scores, 10, largest=False)
+        result = {"scores":top_scores.tolist(), "indexes":top_indices.tolist()}
+        get_db().request_log.insert_one({"user_id": redis_client.hget("user","oid"), "timestamp": datetime.now().isoformat(), "params": entity_urls, "response": result, "execution_time": execution_time})  
+        return jsonify({"allowed": True, "response": result}), 200

@@ -48,6 +48,9 @@ services:
       - MONGO_URI=mongodb://mongodb:27017
       - DB_NAME=predictor_db
       - LIMITER_URL=http://limiter:6000
+      - REDIS_KEY=123
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
   register:
     image: register-service:latest
     container_name: register-service

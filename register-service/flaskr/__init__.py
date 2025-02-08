@@ -12,6 +12,7 @@ import redis
 from flask_session import Session
 import logging
 import sys
+from bson.json_util import dumps
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -88,3 +89,13 @@ def logout():
     redis_client.delete("user")
     
     return jsonify({"allowed": True, "message": "Sesión cerrada"}), 200 
+
+    
+@app.route('/logrequests')
+def logrequests():
+    user_id = redis_client.hget("user","oid")
+    result = get_db().request_log.find({"user_id": user_id})
+    list_cur = list(result)
+    for item in list_cur:
+        del item['_id']
+    return jsonify({"allowed": True, "response": list_cur}), 200

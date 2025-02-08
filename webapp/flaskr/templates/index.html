@@ -3,45 +3,46 @@
 {% block content %}
 <header>
     <nav style="display: flex; justify-content: space-between;">
-        <h3>Bienvenido {{ session.user.email }}</h3>
+        <h3>Bienvenido {{ session.user.email }} - {{session.user.type}}</h3>
         <a href="/logout" class="logout-btn">Cerrar sesión</a>
     </nav>
 </header>
+<div class="container">
+    <h3>Agregue URIs o Ids</h3>
+    <input type="text" id="entity_uri" name="entity_uri">
+    <button onclick="addUri()">Agregar URI</button>
+    <input type="number" id="entity_id" name="entity_id">
+    <button onclick="addId()">Agregar ID</button>
 
-<h3>Agregue URIs o Ids</h3>
-<input type="text" id="entity_uri" name="entity_uri">
-<button onclick="addUri()">Agregar URI</button>
-<input type="number" id="entity_id" name="entity_id">
-<button onclick="addId()">Agregar ID</button>
-
-<p id="limitError" style="color: red;"></p>
+    <p id="limitError" style="color: red;"></p>
 
 
-<h4>Payload</h4>
-<ul id="requestPayload">
-</ul>
+    <h4>Payload</h4>
+    <ul id="requestPayload">
+    </ul>
 
-<button onclick="predict()" id="predictBtn">Predecir</button>
+    <button onclick="predict()" id="predictBtn">Predecir</button>
 
-<h4>Resultado</h4>
+    <h4>Resultado</h4>
 
-<div id="prediction_result">
-    <p id="prediction_error" style="color: red;"></p>
-    <p id="prediction_loading" style="display: none;">Cargando resultados...</p>
-    <table id="prediction_response" style="display: none;">
-        <thead>
-            <tr>
-                <th>Índices</th>
-                <th>Puntajes (Scores)</th>
-            </tr>
-        </thead>
-        <tbody id="prediction_response_body">
-        </tbody>
-    </table>
+    <div id="prediction_result">
+        <p id="prediction_error" style="color: red;"></p>
+        <p id="prediction_loading" style="display: none;">Cargando resultados...</p>
+        <table id="prediction_response" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Índices</th>
+                    <th>Puntajes (Scores)</th>
+                </tr>
+            </thead>
+            <tbody id="prediction_response_body">
+            </tbody>
+        </table>
+    </div>
+
+    {% if error %}
+    <p id="" style="color: red;">{{ error }}</p>
+    {% endif %}
 </div>
-
-{% if error %}
-<p id="" style="color: red;">{{ error }}</p>
-{% endif %}
 
 {% endblock %}
