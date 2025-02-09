@@ -26,6 +26,11 @@ Este proyecto implementa una arquitectura de microservicios para una aplicación
 *   **Servicio de Predicción:** Proporciona la funcionalidad de predicción de bienes raíces basada en un modelo entrenado.
 *   **Servicio de Limitador:** Implementa la limitación de velocidad para proteger el servicio de predicción del abuso.
 
+## Diagrama
+
+![Tp-final](https://github.com/user-attachments/assets/2a5a4329-e2ef-4822-85f7-77cb6f1d3716)
+
+
 ## Componentes
 
 ### 1. Webapp
